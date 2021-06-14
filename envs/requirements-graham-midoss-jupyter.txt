@@ -15,4 +15,3 @@ jupyterlab
 matplotlib
 netCDF4
 scipy
-xarray
