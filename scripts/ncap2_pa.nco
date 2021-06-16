@@ -1,0 +1,4 @@
+presence = OilWaterColumnOilVol_3D(0,:,:,:) * 0.0
+presence = presence.delete_miss()
+presence(:,:,:) = 0.0
+where(OilWaterColumnOilVol_3D(0,:,:,:) > 0.0) presence = 1.0
