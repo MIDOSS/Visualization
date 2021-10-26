@@ -64,7 +64,7 @@ def get_MOHID_netcdf_filenames(results_dir, output_dir):
     
     return files
 
-def aggregate_MOHID(run_list, surface_threshold=3e-3, beach_threshold=15e-3):
+def aggregate_MOHID(run_list, surface_threshold=3e-3, beach_threshold=15e-3, time_threshold=0.2):
     """I still need to add a header here :-) """
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # dimensions, constants, and dictionaries
@@ -87,39 +87,62 @@ def aggregate_MOHID(run_list, surface_threshold=3e-3, beach_threshold=15e-3):
             BeachTime=(dims, numpy.zeros((nruns,ny,nx))),
             BeachVolume=(dims, numpy.zeros((nruns,ny,nx),dtype=float)),
             BeachPresence=(dims, numpy.zeros((nruns,ny,nx),dtype=int)),
-            BeachPresence_one=(dims, numpy.zeros((nruns,ny,nx),dtype=int)),
-            BeachPresence_three=(dims, numpy.zeros((nruns,ny,nx),dtype=int)),
-            BeachPresence_seven=(dims, numpy.zeros((nruns,ny,nx),dtype=int))),
+            BeachPresence_24h=(dims, numpy.zeros((nruns,ny,nx),dtype=int)),
+            BeachPresence_72h=(dims, numpy.zeros((nruns,ny,nx),dtype=int)),
+            BeachPresence_168h=(dims, numpy.zeros((nruns,ny,nx),dtype=int))),
         coords=dict(
             grid_y=range(ny),
             grid_x=range(nx))
     )
 
     dims = ('grid_y','grid_x')
-    Aggregate_Out = xarray.Dataset(
+    BeachingOut = xarray.Dataset(
         data_vars = dict(
-            MinBeachTime=(dims, numpy.zeros((ny,nx)),{"units":"hours"}), #An experiment with attributing variables
-            TotalBeachVolume=(dims, numpy.zeros((ny,nx),dtype=float)),
-            BeachPresence=(dims, numpy.zeros((ny,nx),dtype=int)),
-            BeachPresence_one=(dims, numpy.zeros((ny,nx),dtype=int)),
-            BeachPresence_three=(dims, numpy.zeros((ny,nx),dtype=int)),
-            BeachPresence_seven=(dims, numpy.zeros((ny,nx),dtype=int))), 
+            MinBeachTime=(dims, numpy.zeros((ny,nx)),
+               {"units":"hours",
+                "description":("Earliest beaching arrival time at "
+                    "locations where beached oil is above BeachVolume_threshold"
+                    f" and beaching time is greater than {time_threshold} hr "
+                    "(~1 min for 0.02 default)")}), 
+            MeanBeachTime=(dims, numpy.zeros((ny,nx)),
+                {"units":"hours",
+                "description":("Earliest beaching arrival time at "
+                    "locations where beached oil is above BeachVolume_threshold"
+                    f" and beaching time is greater than {time_threshold} hr "
+                    "(~1 min for 0.02 default)")}),
+            TotalBeachVolume=(dims, numpy.zeros((ny,nx),dtype=float),
+                {"units":"m3/gridcell",
+                "description":("Total volume beached over all runs where" 
+                    "volume>BeachVolume_threshold in any given, individual run")}),
+            BeachPresence=(dims, numpy.zeros((ny,nx),dtype=int),
+                {"units":"none",
+                "description":("An integer value 0<n<=N representing the "
+                    "number out of N runs where oil presence is above the "
+                    "BeachVolume_threshold")}),
+            BeachPresence_24h=(dims, numpy.zeros((ny,nx),dtype=int),
+                {"units":"none",
+                 "description":("An integer value 0<n<=N representing the number "
+                    "out of N runs where oil presence is above the "
+                    "BeachVolume_threshold and within the first 24 hours "
+                    "of spill")}),
+            BeachPresence_72h=(dims, numpy.zeros((ny,nx),dtype=int),
+                {"units":"none",
+                 "description":("An integer value 0<n<=N representing the number "
+                    "out of N runs where oil presence is above the "
+                    "BeachVolume_threshold and within the first 72 hours "
+                    "of spill")}),
+            BeachPresence_168h=(dims, numpy.zeros((ny,nx),dtype=int),
+                {"units":"none",
+                 "description":("An integer value 0<n<=N representing the number "
+                    "out of N runs where oil presence is above the "
+                    "BeachVolume_threshold and within the first 168 hours "
+                    "of spill")})),
         coords=dict(
             grid_y=range(ny),
             grid_x=range(nx)), 
         attrs=dict(
-            MinBeachTime_units = "hours",
-            MinBeachTime=("Earliest, non-zero beaching arrival time at locations " \
-                "where beached oil is above BeachVolume_threshold"),
-            TotalBeachVolume="Total volume beached over all runs where volume>BeachVolume_threshold in any given, individual run",
-            TotalBeachVolume_units="meters-cubed",
             BeachVolume_threshold=beach_threshold,
-            BeachVolume_threshold_units="meters-cubed",
-            BeachPresence="Mask[0,1] where 1 indicates oil presence above BeachVolume_threshold",
-            BeachPresence_one="Mask[0,1] where 1 indicates oil presence above BeachVolume_threshold and within the first 24 hours of spill",
-            BeachPresence_three="Mask[0,1] where 1 indicates oil presence above BeachVolume_threshold and within the first 72 hours of spill",
-            BeachPresence_seven="Mask[0,1] where 1 indicates oil presence above BeachVolume_threshold and within the first 168 hours of spill",
-
+            BeachVolume_threshold_units="m3",
         )
     )
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -128,7 +151,7 @@ def aggregate_MOHID(run_list, surface_threshold=3e-3, beach_threshold=15e-3):
     for run in range(nruns):
         input_file = run_list[run]
         if os.path.isfile(input_file):
-            files.append(input_file)
+            files.append(input_file.split('/')[-1])
             with xarray.open_dataset(input_file) as ds:
                 dt = ds.Beaching_Time-ds.Beaching_Time.min()
                 # Beaching time (converted from ns to hours)
@@ -137,11 +160,6 @@ def aggregate_MOHID(run_list, surface_threshold=3e-3, beach_threshold=15e-3):
                 MOHID_In['BeachTime'] = MOHID_In.BeachTime.where(
                     ds.Beaching_Volume>beach_threshold,
                     0 #if above is false
-                )
-                # Set all null values to 1 billion hours to get earliest arrival time
-                MOHID_In['BeachTime'] = MOHID_In.BeachTime.where(
-                    MOHID_In.BeachTime>0,
-                    1e9
                 )
                 # Save volume over threshold 
                 MOHID_In.BeachVolume[run,:,:] = ds.Beaching_Volume.where(
@@ -159,15 +177,15 @@ def aggregate_MOHID(run_list, surface_threshold=3e-3, beach_threshold=15e-3):
                     ds.Beaching_Volume>beach_threshold, 
                     0
                 )
-                MOHID_In.BeachPresence_one[run,:,:] = dtmask.where(
+                MOHID_In.BeachPresence_24h[run,:,:] = dtmask.where(
                     numpy.logical_and(ds.Beaching_Volume>beach_threshold, dt<=one_day), 
                     0
                 )  
-                MOHID_In.BeachPresence_three[run,:,:] = dtmask.where(
+                MOHID_In.BeachPresence_72h[run,:,:] = dtmask.where(
                     numpy.logical_and(ds.Beaching_Volume>beach_threshold, dt<=three_days), 
                     0
                 )
-                MOHID_In.BeachPresence_seven[run,:,:] = dtmask.where(
+                MOHID_In.BeachPresence_168h[run,:,:] = dtmask.where(
                     numpy.logical_and(ds.Beaching_Volume>beach_threshold, dt<=seven_days), 
                     0
                 )
@@ -175,15 +193,16 @@ def aggregate_MOHID(run_list, surface_threshold=3e-3, beach_threshold=15e-3):
     # Flatten MOHID output into 2D arrays by 
     # taking minimum of spill values or adding across spill values 
     #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    Aggregate_Out['MinBeachTime'] = MOHID_In['BeachTime'].min(dim='nspills')
-    Aggregate_Out['MinBeachTime'] = Aggregate_Out.MinBeachTime.where(
-        Aggregate_Out.MinBeachTime<1e9,
-        0
-    )
-    Aggregate_Out['TotalBeachVolume'] = MOHID_In['BeachVolume'].sum(dim='nspills')
-    Aggregate_Out['BeachPresence'] = MOHID_In['BeachPresence'].sum(dim='nspills')
-    Aggregate_Out['BeachPresence_one'] = MOHID_In['BeachPresence_one'].sum(dim='nspills')
-    Aggregate_Out['BeachPresence_three'] = MOHID_In['BeachPresence_three'].sum(dim='nspills')
-    Aggregate_Out['BeachPresence_seven'] = MOHID_In['BeachPresence_seven'].sum(dim='nspills')
+    nspills=len(files)
+    BeachingOut.attrs['Filenames']=files
+    BeachingOut['MinBeachTime'] = MOHID_In['BeachTime'].where(
+        MOHID_In.BeachTime>time_threshold).min(dim='nspills', skipna=True)
+    BeachingOut['MeanBeachTime'] = MOHID_In['BeachTime'].where(
+        MOHID_In.BeachTime>0.0).mean(dim='nspills', skipna=True)
+    BeachingOut['TotalBeachVolume'] = MOHID_In['BeachVolume'].sum(dim='nspills')
+    BeachingOut['BeachPresence'] = MOHID_In['BeachPresence'].sum(dim='nspills')
+    BeachingOut['BeachPresence_24h'] = MOHID_In['BeachPresence_24h'].sum(dim='nspills')
+    BeachingOut['BeachPresence_72h'] = MOHID_In['BeachPresence_72h'].sum(dim='nspills')
+    BeachingOut['BeachPresence_168h'] = MOHID_In['BeachPresence_168h'].sum(dim='nspills')
     
-    return MOHID_In, Aggregate_Out, files
+    return BeachingOut, files
