@@ -103,7 +103,7 @@ def readfile_aggregate(filename, depths, rng, specific, oils, mcsize=49, minoil=
                                                  * np.broadcast_to(pois, (396, 896, mcsize+1)).transpose())
         specific['surface_oil'] = specific.surface_oil + (np.broadcast_to(oil_vol, (mcsize+1, 896, 396)) 
                                                  * np.broadcast_to(pois, (396, 896, mcsize+1)).transpose()) 
-        oils['surface_oil'] = specific.surface_oil + (np.broadcast_to(oil_vol, (mcsize+1, 896, 396)) 
+        oils['surface_oil'] = oils.surface_oil + (np.broadcast_to(oil_vol, (mcsize+1, 896, 396)) 
                                                  * np.broadcast_to(pois, (396, 896, mcsize+1)).transpose()) 
         
         specific['files_aggregate'][specific.nofiles-1] = fspath(filename)
@@ -123,14 +123,14 @@ def readfile_aggregate(filename, depths, rng, specific, oils, mcsize=49, minoil=
     oils['deeppresence'] = oils.deeppresence + oiled
     specific['deep_oil'] = specific.deep_oil + (np.broadcast_to(oil_vol, (mcsize+1, 896, 396)) 
                                                  * np.broadcast_to(pois, (396, 896, mcsize+1)).transpose()) 
-    oils['deep_oil'] = specific.deep_oil + (np.broadcast_to(oil_vol, (mcsize+1, 896, 396)) 
+    oils['deep_oil'] = oils.deep_oil + (np.broadcast_to(oil_vol, (mcsize+1, 896, 396)) 
                                                  * np.broadcast_to(pois, (396, 896, mcsize+1)).transpose()) 
     print(oiled.sum())
     
     location = (depths[zmax:39] * water_column_oil.transpose()).transpose().sum(axis=0) * oiled / column_oil  
     specific['deep_location'] = specific.deep_location + (np.broadcast_to(location, (mcsize+1, 896, 396)) 
                                                  * np.broadcast_to(pois, (396, 896, mcsize+1)).transpose()) 
-    oils['deep_location'] = specific.deep_location + (np.broadcast_to(location, (mcsize+1, 896, 396)) 
+    oils['deep_location'] = oils.deep_location + (np.broadcast_to(location, (mcsize+1, 896, 396)) 
                                                  * np.broadcast_to(pois, (396, 896, mcsize+1)).transpose())
         
         
