@@ -182,4 +182,5 @@ if __name__ == "__main__":
     if len(sys.argv) == 5:
         if sys.argv[4] == 'True':
             init_files = True
+    print (directory, init_files, infile, outfile)
     aggregate_a_directory(directory, init_files, infile, outfile)
